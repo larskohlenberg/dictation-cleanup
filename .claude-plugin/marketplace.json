@@ -1,0 +1,5 @@
+{
+  "name": "dictation-cleanup",
+  "owner": { "name": "Lars Kohlenberg" },
+  "plugins": [{ "name": "dictation-cleanup", "source": "./" }]
+}
