@@ -51,3 +51,35 @@ test('a lost placeholder sends the original', async ($, on) => {
   const text = `${DUMP} ${PASTE}`
   expect((await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false })).text).toBe(text)
 })
+
+test('a dictation that arrives as a paste block is rewritten', async ($, on) => {
+  let asked = ''
+  on('model.complete', (_, e) => {
+    asked = String(e.prompt)
+    return { value: { isAnswered: true, text: 'Ich brauche bis Donnerstag die Zahlen für Q3.', usage } }
+  })
+  on('clock.now', () => ({ value: 0 }))
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  const text = `<pasted_content id="7">\n${DUMP}\n</pasted_content id="7">`
+  const r = await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false })
+
+  expect(asked).toContain('bis freitag')
+  expect(r.text).toBe('Ich brauche bis Donnerstag die Zahlen für Q3.')
+})
+
+test('a pasted code block alone passes as typed', async ($, on) => {
+  let called = false
+  on('model.complete', () => {
+    called = true
+    return { value: { isAnswered: true, text: 'x', usage } }
+  })
+  on('clock.now', () => ({ value: 0 }))
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  const code = '<pasted_content id="2">\nconst a = { b: f(1), c: [2, 3] }; if (a.b) { run(a.c) }\n</pasted_content id="2">'
+  const r = await $.prompt.submit({ text: code, origin: { kind: 'composer' }, wait: false })
+
+  expect(called).toBe(false)
+  expect(r.text).toBe(code)
+})

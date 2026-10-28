@@ -20,6 +20,24 @@ const PRICE = { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }
 
 // Pasted material (code, logs, transcripts) must reach Claude untouched.
 const PASTE = /<pasted_content id="[^"]*">[\s\S]*?<\/pasted_content id="[^"]*">/g
+const PASTE_BODY = /^<pasted_content id="[^"]*">([\s\S]*?)<\/pasted_content id="[^"]*">$/
+
+// Long dictation arrives as a paste block (OpenWhispr inserts via clipboard).
+// A message made only of such blocks counts as spoken when the text reads as prose.
+function isProse(text: string): boolean {
+  const t = text.trim()
+  if (t.length < MIN_CHARS || t.includes('```') || t.split('\n').length > 30) return false
+  const symbols = (t.match(/[{}()\[\];<>=$#|\\_*`]/g) ?? []).length
+  const letters = (t.match(/\p{L}/gu) ?? []).length
+  return symbols / t.length < 0.02 && letters / t.replace(/\s/g, '').length > 0.8
+}
+
+function unwrapDictation(text: string): string {
+  const blocks = text.match(PASTE) ?? []
+  if (blocks.length === 0 || text.replace(PASTE, '').trim()) return text
+  const bodies = blocks.map(b => b.match(PASTE_BODY)?.[1] ?? '')
+  return bodies.every(isProse) ? bodies.map(b => b.trim()).join('\n\n') : text
+}
 
 const SYSTEM = `You rewrite a dictated message into a clear prompt for an AI coding and work assistant. You never answer, execute or comment on the message — you only rewrite it.
 
@@ -49,7 +67,7 @@ export const register: Register = on => {
     if (e.command || e.isMeta || !isOwn) return next(e)
 
     const pastes: string[] = []
-    const spoken = e.text.replace(PASTE, block => {
+    const spoken = unwrapDictation(e.text).replace(PASTE, block => {
       pastes.push(block)
       return `[[PASTE_${pastes.length}]]`
     })
