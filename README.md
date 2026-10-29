@@ -1,5 +1,13 @@
 # dictation-cleanup
 
+> **Moved.** This mod is now part of **cockpit** in [larskohlenberg/lk-plugins](https://github.com/larskohlenberg/lk-plugins), with an on/off button (🎙/🔇) above the prompt. This repository is archived and gets no more updates. To switch:
+>
+> ```bash
+> claude plugin uninstall dictation-cleanup@dictation-cleanup
+> claude plugin marketplace add larskohlenberg/lk-plugins
+> claude plugin install cockpit@lk-plugins
+> ```
+
 A Claude Code mod that turns dictated brain dumps into a clear, structured prompt — before Claude reads them.
 
 When you dictate a prompt, it comes out the way people talk: filler words, restarts, self-corrections ("Friday — no wait, Thursday"), jumps between topics, misheard product names. This mod sends each prompt you submit through **Claude Haiku** first and hands Claude the cleaned-up version instead:
