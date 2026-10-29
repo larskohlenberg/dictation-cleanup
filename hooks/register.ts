@@ -61,10 +61,38 @@ Placeholders like [[PASTE_1]] stand for pasted material: keep each one exactly o
 
 Output only the rewritten message — no preamble, no quotes, no remarks.`
 
+// The switch survives sessions; unset means on.
+const ENABLED = 'enabled'
+
 export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: 'dictation-cleanup',
+      description: 'Turn the dictation cleanup on or off (on | off | status; no argument toggles)',
+    })
+    return next(e)
+  })
+
+  on('command.run', { command: 'dictation-cleanup' }, async ($, e) => {
+    const arg = (e.args ?? '').trim().toLowerCase()
+    const isOn = (await $.store.get(ENABLED)) !== false
+    if (arg === 'status') return { text: `dictation-cleanup is ${isOn ? 'on' : 'off'}.` }
+    if (arg && arg !== 'on' && arg !== 'off') {
+      return { text: 'Usage: /dictation-cleanup [on | off | status]' }
+    }
+    const turnOn = arg ? arg === 'on' : !isOn
+    await $.store.set(ENABLED, turnOn)
+    return {
+      text: turnOn
+        ? 'dictation-cleanup is on: dictated prompts are rewritten by Haiku.'
+        : 'dictation-cleanup is off: prompts reach Claude as typed.',
+    }
+  })
+
   on('prompt.submit', async ($, e, next) => {
     const isOwn = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
     if (e.command || e.isMeta || !isOwn) return next(e)
+    if ((await $.store.get(ENABLED)) === false) return next(e)
 
     const pastes: string[] = []
     const spoken = unwrapDictation(e.text).replace(PASTE, block => {

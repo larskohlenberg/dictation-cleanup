@@ -1,6 +1,16 @@
 import { expect, test } from 'claude-code/testing'
 
 const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+// Stands for $.store, which nothing beneath the plugin answers in a test.
+function store(on: Parameters<Parameters<typeof test>[1]>[1]) {
+  const values = new Map<string, unknown>()
+  on('store.get', (_, e) => ({ value: values.get(e.key) }))
+  on('store.set', (_, e) => {
+    values.set(e.key, e.value)
+    return { value: undefined }
+  })
+}
+
 const DUMP = 'also ähm ich bräuchte halt bis freitag nee warte bis donnerstag die äh die zahlen für q3'
 const PASTE = '<pasted_content id="1">\nfoo()\n</pasted_content id="1">'
 
@@ -11,6 +21,7 @@ test('a long dictation reaches Claude rewritten', async ($, on) => {
     return { value: { isAnswered: true, text: 'Ich brauche bis Donnerstag die Zahlen für Q3.', usage } }
   })
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   const r = await $.prompt.submit({ text: DUMP, origin: { kind: 'composer' }, wait: false })
@@ -26,6 +37,7 @@ test('pasted material stays untouched', async ($, on) => {
     return { value: { isAnswered: true, text: 'Schau dir den Code an: [[PASTE_1]]', usage } }
   })
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   const r = await $.prompt.submit({ text: `${DUMP} ${PASTE}`, origin: { kind: 'composer' }, wait: false })
@@ -37,6 +49,7 @@ test('pasted material stays untouched', async ($, on) => {
 test('a short prompt and a failed rewrite pass as typed', async ($, on) => {
   on('model.complete', () => ({ value: { isAnswered: false, reason: 'empty-reply', usage } }))
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   expect((await $.prompt.submit({ text: 'ja, mach weiter', origin: { kind: 'composer' }, wait: false })).text).toBe('ja, mach weiter')
@@ -46,6 +59,7 @@ test('a short prompt and a failed rewrite pass as typed', async ($, on) => {
 test('a lost placeholder sends the original', async ($, on) => {
   on('model.complete', () => ({ value: { isAnswered: true, text: 'Schau dir den Code an.', usage } }))
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   const text = `${DUMP} ${PASTE}`
@@ -59,6 +73,7 @@ test('a dictation that arrives as a paste block is rewritten', async ($, on) => 
     return { value: { isAnswered: true, text: 'Ich brauche bis Donnerstag die Zahlen für Q3.', usage } }
   })
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   const text = `<pasted_content id="7">\n${DUMP}\n</pasted_content id="7">`
@@ -75,6 +90,7 @@ test('a pasted code block alone passes as typed', async ($, on) => {
     return { value: { isAnswered: true, text: 'x', usage } }
   })
   on('clock.now', () => ({ value: 0 }))
+  store(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   const code = '<pasted_content id="2">\nconst a = { b: f(1), c: [2, 3] }; if (a.b) { run(a.c) }\n</pasted_content id="2">'
@@ -82,4 +98,25 @@ test('a pasted code block alone passes as typed', async ($, on) => {
 
   expect(called).toBe(false)
   expect(r.text).toBe(code)
+})
+
+test('the switch turns the rewrite off and on again', async ($, on) => {
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true, text: 'Ich brauche bis Donnerstag die Zahlen für Q3.', usage } }
+  })
+  on('clock.now', () => ({ value: 0 }))
+  store(on)
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  const submit = () => $.prompt.submit({ text: DUMP, origin: { kind: 'composer' }, wait: false })
+
+  expect((await $.command.run({ command: 'dictation-cleanup', args: 'off' })).text).toContain('off')
+  expect((await submit()).text).toBe(DUMP)
+  expect(calls).toBe(0)
+
+  expect((await $.command.run({ command: 'dictation-cleanup', args: 'status' })).text).toContain('off')
+  expect((await $.command.run({ command: 'dictation-cleanup' })).text).toContain('on')
+  expect((await submit()).text).toBe('Ich brauche bis Donnerstag die Zahlen für Q3.')
+  expect(calls).toBe(1)
 })

@@ -47,6 +47,17 @@ Claude reads:
 - **tokens** — as reported by the API for this call
 - **cost** — estimated from those tokens at Haiku's list price (see `PRICE` in the code); on a Claude subscription there is no per-call charge, the calls count toward your usage limit
 
+## Turn it on or off
+
+```
+/dictation-cleanup off      # prompts reach Claude as typed
+/dictation-cleanup on       # rewrite again
+/dictation-cleanup status   # show the current state
+/dictation-cleanup          # toggle
+```
+
+The setting is kept across sessions.
+
 ## What it leaves alone
 
 - prompts shorter than 40 characters ("yes, go on") — see `MIN_CHARS`
